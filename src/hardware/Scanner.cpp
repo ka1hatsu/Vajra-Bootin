@@ -2,6 +2,7 @@
 
 #include <dxgi1_6.h>
 #include <windows.h>
+#include <winternl.h>
 
 #include <array>
 #include <string>
@@ -20,16 +21,12 @@ std::string wide_to_utf8(const std::wstring& value) {
 
 std::string read_cpu_name() {
     HKEY key = nullptr;
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &key) != ERROR_SUCCESS) {
-        return "Unknown";
-    }
-
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &key) != ERROR_SUCCESS) return "Unknown";
     std::array<wchar_t, 256> buffer{};
     DWORD bytes = static_cast<DWORD>(buffer.size() * sizeof(wchar_t));
     DWORD type = 0;
     const LONG status = RegQueryValueExW(key, L"ProcessorNameString", nullptr, &type, reinterpret_cast<LPBYTE>(buffer.data()), &bytes);
     RegCloseKey(key);
-
     if (status != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ)) return "Unknown";
     return wide_to_utf8(buffer.data());
 }
@@ -49,11 +46,9 @@ std::string detect_windows_version() {
     if (!ntdll) return "Windows";
     const auto rtl_get_version = reinterpret_cast<RtlGetVersionFn>(GetProcAddress(ntdll, "RtlGetVersion"));
     if (!rtl_get_version) return "Windows";
-
     RTL_OSVERSIONINFOW version{};
     version.dwOSVersionInfoSize = sizeof(version);
     if (rtl_get_version(&version) != 0) return "Windows";
-
     std::string label = version.dwMajorVersion >= 10 && version.dwBuildNumber >= 22000 ? "Windows 11" : "Windows 10";
     label += " (build " + std::to_string(version.dwBuildNumber) + ")";
     return label;
@@ -72,7 +67,6 @@ std::string detect_firmware_mode() {
 void detect_gpu(HardwareProfile& profile) {
     IDXGIFactory1* factory = nullptr;
     if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return;
-
     IDXGIAdapter1* adapter = nullptr;
     for (UINT index = 0; factory->EnumAdapters1(index, &adapter) != DXGI_ERROR_NOT_FOUND; ++index) {
         DXGI_ADAPTER_DESC1 description{};
@@ -87,6 +81,13 @@ void detect_gpu(HardwareProfile& profile) {
         adapter = nullptr;
     }
     factory->Release();
+}
+
+std::wstring system_drive_root() {
+    std::array<wchar_t, MAX_PATH> windows_directory{};
+    const UINT length = GetWindowsDirectoryW(windows_directory.data(), static_cast<UINT>(windows_directory.size()));
+    if (length < 3 || length >= windows_directory.size()) return L"C:\\";
+    return std::wstring(windows_directory.data(), 3);
 }
 
 } // namespace
@@ -108,9 +109,8 @@ HardwareProfile scan_hardware() {
     profile.firmware_mode = detect_firmware_mode();
 
     ULARGE_INTEGER free_bytes{};
-    if (GetDiskFreeSpaceExW(nullptr, &free_bytes, nullptr, nullptr)) {
-        profile.system_drive_free_bytes = free_bytes.QuadPart;
-    }
+    const std::wstring root = system_drive_root();
+    if (GetDiskFreeSpaceExW(root.c_str(), &free_bytes, nullptr, nullptr)) profile.system_drive_free_bytes = free_bytes.QuadPart;
 
     detect_gpu(profile);
     return profile;
