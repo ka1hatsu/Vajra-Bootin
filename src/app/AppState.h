@@ -1,5 +1,7 @@
 #pragma once
 
+#include "hardware/HardwareProfile.h"
+
 namespace vajra {
 
 enum class Screen {
@@ -15,6 +17,8 @@ enum class Screen {
 struct AppState {
     Screen current_screen{Screen::Welcome};
     bool running{true};
+    bool hardware_scanned{false};
+    hardware::HardwareProfile hardware{};
 };
 
 } // namespace vajra
