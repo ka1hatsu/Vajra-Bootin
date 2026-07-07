@@ -1,5 +1,7 @@
 #include "app/Application.h"
 
+#include <iterator>
+
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
@@ -14,9 +16,7 @@ constexpr wchar_t kWindowClass[] = L"VajraBootinWindow";
 constexpr wchar_t kWindowTitle[] = L"Vajra Bi-Bootin";
 }
 
-Application::~Application() {
-    destroy_device();
-}
+Application::~Application() { destroy_device(); }
 
 int Application::run(HINSTANCE instance, int show_command) {
     if (!create_main_window(instance, show_command) || !create_device()) {
@@ -39,14 +39,9 @@ int Application::run(HINSTANCE instance, int show_command) {
         while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&message);
             DispatchMessageW(&message);
-            if (message.message == WM_QUIT) {
-                state_.running = false;
-            }
+            if (message.message == WM_QUIT) state_.running = false;
         }
-
-        if (!state_.running) {
-            break;
-        }
+        if (!state_.running) break;
         render_frame();
     }
 
@@ -54,7 +49,8 @@ int Application::run(HINSTANCE instance, int show_command) {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
     destroy_device();
-    DestroyWindow(window_);
+    if (window_ && IsWindow(window_)) DestroyWindow(window_);
+    window_ = nullptr;
     UnregisterClassW(kWindowClass, instance);
     return 0;
 }
@@ -67,21 +63,14 @@ bool Application::create_main_window(HINSTANCE instance, int show_command) {
     window_class.hInstance = instance;
     window_class.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClass;
+    if (!RegisterClassExW(&window_class)) return false;
 
-    if (!RegisterClassExW(&window_class)) {
-        return false;
-    }
-
-    window_ = CreateWindowExW(
-        0, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1100, 720,
-        nullptr, nullptr, instance, this);
-
+    window_ = CreateWindowExW(0, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT, 1100, 720, nullptr, nullptr, instance, this);
     if (!window_) {
         UnregisterClassW(kWindowClass, instance);
         return false;
     }
-
     ShowWindow(window_, show_command);
     UpdateWindow(window_);
     return true;
@@ -99,16 +88,10 @@ bool Application::create_device() {
 
     constexpr D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
     D3D_FEATURE_LEVEL selected_level{};
-
-    const HRESULT result = D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
-        levels, static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION,
+    const HRESULT result = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE,
+        nullptr, 0, levels, static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION,
         &descriptor, &swap_chain_, &device_, &selected_level, &context_);
-
-    if (FAILED(result)) {
-        return false;
-    }
-
+    if (FAILED(result)) return false;
     create_render_target();
     return render_target_ != nullptr;
 }
@@ -121,6 +104,7 @@ void Application::destroy_device() {
 }
 
 void Application::create_render_target() {
+    if (!swap_chain_ || !device_) return;
     ID3D11Texture2D* back_buffer = nullptr;
     if (SUCCEEDED(swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer)))) {
         device_->CreateRenderTargetView(back_buffer, nullptr, &render_target_);
@@ -129,20 +113,16 @@ void Application::create_render_target() {
 }
 
 void Application::destroy_render_target() {
-    if (render_target_) {
-        render_target_->Release();
-        render_target_ = nullptr;
-    }
+    if (render_target_) { render_target_->Release(); render_target_ = nullptr; }
 }
 
 void Application::render_frame() {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
-
     ui::render(state_);
-
     ImGui::Render();
+
     constexpr float clear_color[4] = {0.035f, 0.055f, 0.10f, 1.0f};
     context_->OMSetRenderTargets(1, &render_target_, nullptr);
     context_->ClearRenderTargetView(render_target_, clear_color);
@@ -151,12 +131,9 @@ void Application::render_frame() {
 }
 
 LRESULT CALLBACK Application::window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, message, wparam, lparam)) {
-        return true;
-    }
+    if (ImGui::GetCurrentContext() && ImGui_ImplWin32_WndProcHandler(hwnd, message, wparam, lparam)) return true;
 
     Application* application = reinterpret_cast<Application*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-
     if (message == WM_NCCREATE) {
         const auto* create = reinterpret_cast<CREATESTRUCTW*>(lparam);
         application = static_cast<Application*>(create->lpCreateParams);
@@ -167,14 +144,13 @@ LRESULT CALLBACK Application::window_proc(HWND hwnd, UINT message, WPARAM wparam
     case WM_SIZE:
         if (application && application->device_ && wparam != SIZE_MINIMIZED) {
             application->destroy_render_target();
-            application->swap_chain_->ResizeBuffers(0, LOWORD(lparam), HIWORD(lparam), DXGI_FORMAT_UNKNOWN, 0);
-            application->create_render_target();
+            if (SUCCEEDED(application->swap_chain_->ResizeBuffers(0, LOWORD(lparam), HIWORD(lparam), DXGI_FORMAT_UNKNOWN, 0))) {
+                application->create_render_target();
+            }
         }
         return 0;
     case WM_SYSCOMMAND:
-        if ((wparam & 0xfff0) == SC_KEYMENU) {
-            return 0;
-        }
+        if ((wparam & 0xfff0) == SC_KEYMENU) return 0;
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -182,7 +158,6 @@ LRESULT CALLBACK Application::window_proc(HWND hwnd, UINT message, WPARAM wparam
     default:
         break;
     }
-
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
