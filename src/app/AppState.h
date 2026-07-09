@@ -2,6 +2,8 @@
 
 #include "hardware/HardwareProfile.h"
 
+#include <string>
+
 namespace vajra {
 
 enum class Screen {
@@ -21,6 +23,7 @@ struct AppState {
     hardware::HardwareProfile hardware{};
     int purpose_index{0};
     int experience_index{0};
+    std::string selected_distro_id;
 };
 
 } // namespace vajra
