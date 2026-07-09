@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.5 LANGUAGES CXX)
+project(VajraBootin VERSION 0.4.6 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -32,10 +32,10 @@ target_include_directories(vajra_verification PUBLIC src)
 target_compile_options(vajra_verification PRIVATE /W4 /permissive- /EHsc)
 target_link_libraries(vajra_verification PUBLIC bcrypt)
 
-add_library(vajra_workflow STATIC src/workflow/VerifiedDownload.cpp)
+add_library(vajra_workflow STATIC src/workflow/VerifiedDownload.cpp src/workflow/DownloadSelection.cpp)
 target_include_directories(vajra_workflow PUBLIC src)
 target_compile_options(vajra_workflow PRIVATE /W4 /permissive- /EHsc)
-target_link_libraries(vajra_workflow PUBLIC vajra_download vajra_verification)
+target_link_libraries(vajra_workflow PUBLIC vajra_download vajra_verification vajra_recommender)
 
 add_executable(Vajra WIN32 src/main.cpp src/app/Application.cpp src/hardware/Scanner.cpp src/ui/AppUi.cpp)
 target_include_directories(Vajra PRIVATE src)
@@ -73,6 +73,11 @@ if(BUILD_TESTING)
     target_link_libraries(VajraVerifiedDownloadTests PRIVATE vajra_workflow)
     target_compile_options(VajraVerifiedDownloadTests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME verified_download_workflow COMMAND VajraVerifiedDownloadTests)
+
+    add_executable(VajraDownloadSelectionTests tests/DownloadSelectionTests.cpp)
+    target_link_libraries(VajraDownloadSelectionTests PRIVATE vajra_workflow)
+    target_compile_options(VajraDownloadSelectionTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME recommendation_download_handoff COMMAND VajraDownloadSelectionTests)
 endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Vajra)
