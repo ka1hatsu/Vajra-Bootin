@@ -8,7 +8,6 @@
 #include <cctype>
 #include <fstream>
 #include <iomanip>
-#include <memory>
 #include <sstream>
 #include <vector>
 
@@ -31,11 +30,17 @@ std::string lowercase(std::string value) {
 struct AlgorithmGuard {
     BCRYPT_ALG_HANDLE handle{};
     ~AlgorithmGuard() { if (handle) BCryptCloseAlgorithmProvider(handle, 0); }
+    AlgorithmGuard() = default;
+    AlgorithmGuard(const AlgorithmGuard&) = delete;
+    AlgorithmGuard& operator=(const AlgorithmGuard&) = delete;
 };
 
 struct HashGuard {
     BCRYPT_HASH_HANDLE handle{};
     ~HashGuard() { if (handle) BCryptDestroyHash(handle); }
+    HashGuard() = default;
+    HashGuard(const HashGuard&) = delete;
+    HashGuard& operator=(const HashGuard&) = delete;
 };
 
 } // namespace
@@ -58,7 +63,7 @@ VerificationResult verify_sha256(const std::filesystem::path& path,
     DWORD result_size = 0;
     if (BCryptGetProperty(algorithm.handle, BCRYPT_OBJECT_LENGTH,
                           reinterpret_cast<PUCHAR>(&object_length), sizeof(object_length),
-                          &result_size, 0) < 0) {
+                          &result_size, 0) < 0 || object_length == 0) {
         return {VerificationState::CryptoError, {}, "Could not query SHA-256 provider."};
     }
 
@@ -69,7 +74,9 @@ VerificationResult verify_sha256(const std::filesystem::path& path,
         return {VerificationState::CryptoError, {}, "Could not create SHA-256 hash state."};
     }
 
-    std::array<char, 1024 * 1024> buffer{};
+    // Keep the streaming buffer on the heap. A 1 MiB local array can exhaust the
+    // default Windows thread stack before the function body begins executing.
+    std::vector<char> buffer(256 * 1024);
     while (input) {
         input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
         const std::streamsize count = input.gcount();
