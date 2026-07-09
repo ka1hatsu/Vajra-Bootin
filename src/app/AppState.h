@@ -19,6 +19,8 @@ struct AppState {
     bool running{true};
     bool hardware_scanned{false};
     hardware::HardwareProfile hardware{};
+    int purpose_index{0};
+    int experience_index{0};
 };
 
 } // namespace vajra
