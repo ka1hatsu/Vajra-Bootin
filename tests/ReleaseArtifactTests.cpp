@@ -31,6 +31,24 @@ int main() {
     missing_filename.filename.clear();
     check(!is_valid_release_artifact(missing_filename), "missing filename must be rejected");
 
+    auto mismatched_filename = valid;
+    mismatched_filename.download_url = "https://downloads.example.org/different.iso";
+    check(!is_valid_release_artifact(mismatched_filename), "URL basename must exactly match artifact filename");
+
+    auto traversal_filename = valid;
+    traversal_filename.filename = "../example.iso";
+    traversal_filename.download_url = "https://downloads.example.org/../example.iso";
+    check(!is_valid_release_artifact(traversal_filename), "path-like artifact filename must be rejected");
+
+    auto query_url = valid;
+    query_url.download_url = "https://downloads.example.org/example.iso?mirror=1";
+    check(!is_valid_release_artifact(query_url), "artifact URL query strings must be rejected");
+
+    auto non_iso = valid;
+    non_iso.filename = "example.img";
+    non_iso.download_url = "https://downloads.example.org/example.img";
+    check(!is_valid_release_artifact(non_iso), "catalog artifacts must be ISO files");
+
     check(!find_release_artifact("missing", "x86_64").has_value(),
           "unknown distro must not produce fabricated metadata");
 
