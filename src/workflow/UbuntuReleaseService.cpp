@@ -2,9 +2,11 @@
 
 #include "catalog/ArtifactCache.h"
 #include "download/MetadataClient.h"
+#include "download/SourcePolicy.h"
 
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace vajra::workflow {
@@ -17,7 +19,7 @@ bool candidate_name(const std::string& name) {
     constexpr std::string_view suffix="-desktop-amd64.iso";
     return name.starts_with(prefix) && name.ends_with(suffix) &&
            name.find('/')==std::string::npos && name.find('\\')==std::string::npos &&
-           name.find("..", prefix.size())==std::string::npos;
+           name.find("..",prefix.size())==std::string::npos;
 }
 
 std::vector<std::string> desktop_names(std::string_view manifest) {
@@ -52,8 +54,7 @@ std::optional<ArtifactResolution> resolve_ubuntu_lts(const std::filesystem::path
         }
     }
     if(const auto cached=catalog::read_artifact_cache(cache_path)) {
-        if(cached->distro_id=="ubuntu"&&cached->architecture=="x86_64"&&
-           download::check_source_url(cached->download_url).allowed())
+        if(cached->distro_id=="ubuntu"&&cached->architecture=="x86_64"&&download::check_source_url(cached->download_url).allowed())
             return ArtifactResolution{*cached,ArtifactResolutionSource::BundledFallback};
     }
     return validated_bundled_fallback("ubuntu","x86_64");
