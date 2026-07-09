@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.6 LANGUAGES CXX)
+project(VajraBootin VERSION 0.4.7 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -18,7 +18,7 @@ add_library(imgui STATIC ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui
 target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(imgui PUBLIC d3d11 dxgi)
 
-add_library(vajra_recommender STATIC src/catalog/Distro.cpp src/catalog/ReleaseArtifact.cpp src/recommender/Recommender.cpp)
+add_library(vajra_recommender STATIC src/catalog/Distro.cpp src/catalog/ReleaseArtifact.cpp src/catalog/ChecksumManifest.cpp src/recommender/Recommender.cpp)
 target_include_directories(vajra_recommender PUBLIC src)
 target_compile_options(vajra_recommender PRIVATE /W4 /permissive- /EHsc)
 
@@ -53,6 +53,11 @@ if(BUILD_TESTING)
     target_link_libraries(VajraReleaseArtifactTests PRIVATE vajra_recommender)
     target_compile_options(VajraReleaseArtifactTests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME release_artifact_catalog COMMAND VajraReleaseArtifactTests)
+
+    add_executable(VajraChecksumManifestTests tests/ChecksumManifestTests.cpp)
+    target_link_libraries(VajraChecksumManifestTests PRIVATE vajra_recommender)
+    target_compile_options(VajraChecksumManifestTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME checksum_manifest_parser COMMAND VajraChecksumManifestTests)
 
     add_executable(VajraSourcePolicyTests tests/SourcePolicyTests.cpp)
     target_link_libraries(VajraSourcePolicyTests PRIVATE vajra_download)
