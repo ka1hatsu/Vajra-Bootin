@@ -1,8 +1,17 @@
 #include "workflow/VerifiedDownload.h"
 
+#include <algorithm>
+#include <cctype>
 #include <utility>
 
 namespace vajra::workflow {
+namespace {
+bool valid_sha256(const std::string& value) {
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char c) {
+        return std::isxdigit(c) != 0;
+    });
+}
+}
 
 VerifiedDownload::~VerifiedDownload() { cancel(); wait(); }
 
@@ -11,6 +20,15 @@ bool VerifiedDownload::start(std::string url, std::filesystem::path destination,
                              WorkflowStateCallback state_changed, WorkflowCompletionCallback completion) {
     if (state_.load() == VerifiedDownloadState::Downloading || state_.load() == VerifiedDownloadState::Verifying) return false;
     downloader_.wait();
+
+    if (!valid_sha256(expected_sha256)) {
+        state_.store(VerifiedDownloadState::Failed);
+        set_result({VerifiedDownloadState::Failed, destination, {},
+            "Enter the official SHA-256 checksum before downloading. It must contain exactly 64 hexadecimal characters."});
+        if (state_changed) state_changed(VerifiedDownloadState::Failed);
+        return false;
+    }
+
     state_.store(VerifiedDownloadState::Downloading);
     set_result({VerifiedDownloadState::Downloading, destination, {}, "Download started."});
     if (state_changed) state_changed(VerifiedDownloadState::Downloading);
