@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.4 LANGUAGES CXX)
+project(VajraBootin VERSION 0.4.5 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -18,7 +18,7 @@ add_library(imgui STATIC ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui
 target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(imgui PUBLIC d3d11 dxgi)
 
-add_library(vajra_recommender STATIC src/catalog/Distro.cpp src/recommender/Recommender.cpp)
+add_library(vajra_recommender STATIC src/catalog/Distro.cpp src/catalog/ReleaseArtifact.cpp src/recommender/Recommender.cpp)
 target_include_directories(vajra_recommender PUBLIC src)
 target_compile_options(vajra_recommender PRIVATE /W4 /permissive- /EHsc)
 
@@ -48,6 +48,11 @@ if(BUILD_TESTING)
     target_link_libraries(VajraRecommenderTests PRIVATE vajra_recommender)
     target_compile_options(VajraRecommenderTests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME recommender_rules COMMAND VajraRecommenderTests)
+
+    add_executable(VajraReleaseArtifactTests tests/ReleaseArtifactTests.cpp)
+    target_link_libraries(VajraReleaseArtifactTests PRIVATE vajra_recommender)
+    target_compile_options(VajraReleaseArtifactTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME release_artifact_catalog COMMAND VajraReleaseArtifactTests)
 
     add_executable(VajraSourcePolicyTests tests/SourcePolicyTests.cpp)
     target_link_libraries(VajraSourcePolicyTests PRIVATE vajra_download)
