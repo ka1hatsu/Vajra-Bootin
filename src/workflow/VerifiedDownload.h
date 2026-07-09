@@ -38,6 +38,7 @@ public:
     void cancel() noexcept;
     void wait();
     [[nodiscard]] VerifiedDownloadState state() const noexcept;
+    [[nodiscard]] download::DownloadProgress download_progress() const noexcept;
     [[nodiscard]] VerifiedDownloadResult result() const;
 
 private:
