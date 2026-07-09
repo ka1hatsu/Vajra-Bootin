@@ -30,10 +30,18 @@ bool is_valid_release_artifact(const ReleaseArtifact& artifact) noexcept {
 }
 
 const std::vector<ReleaseArtifact>& release_artifacts() {
-    // Release-specific URLs and checksums intentionally live here rather than in
-    // Distro.cpp. Entries are added only after their URL and digest are verified
-    // against the publisher's official release metadata.
-    static const std::vector<ReleaseArtifact> artifacts{};
+    // Ubuntu 24.04.4 LTS desktop amd64 entry verified against Canonical's
+    // releases.ubuntu.com/24.04 directory and SHA256SUMS publisher manifest.
+    static const std::vector<ReleaseArtifact> artifacts{
+        {
+            "ubuntu",
+            "24.04.4 LTS",
+            "x86_64",
+            "ubuntu-24.04.4-desktop-amd64.iso",
+            "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso",
+            "3a4c9877b483ab46d7c3fbe165a0db275e1ae3cfe56a5657e5a47c2f99a99d1e"
+        }
+    };
     return artifacts;
 }
 
