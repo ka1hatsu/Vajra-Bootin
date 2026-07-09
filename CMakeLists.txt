@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.2.0 LANGUAGES CXX)
+project(VajraBootin VERSION 0.3.0 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -31,13 +31,14 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
 )
-
 target_link_libraries(imgui PUBLIC d3d11 dxgi)
 
 add_executable(Vajra WIN32
     src/main.cpp
     src/app/Application.cpp
+    src/catalog/Distro.cpp
     src/hardware/Scanner.cpp
+    src/recommender/Recommender.cpp
     src/ui/AppUi.cpp
 )
 
