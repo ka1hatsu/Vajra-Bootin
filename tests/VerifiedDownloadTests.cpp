@@ -3,30 +3,36 @@
 #include <cstdlib>
 #include <iostream>
 
+namespace {
+int failures = 0;
+void check(bool condition, const char* message) {
+    if (!condition) { std::cerr << "FAIL: " << message << '\n'; ++failures; }
+}
+}
+
 int main() {
     using namespace vajra::workflow;
 
-    VerifiedDownload workflow;
-    if (workflow.state() != VerifiedDownloadState::Idle) {
-        std::cerr << "FAIL: new workflow should be idle\n";
-        return EXIT_FAILURE;
+    {
+        VerifiedDownload workflow;
+        check(workflow.state() == VerifiedDownloadState::Idle, "new workflow should be idle");
+        const bool started = workflow.start("http://releases.ubuntu.com/test.iso", "test.iso", std::string(64, '0'));
+        check(!started && workflow.state() == VerifiedDownloadState::Failed,
+              "unsafe URL must fail before download");
+        check(!workflow.result().message.empty(), "URL rejection should explain the failure");
+        check(!workflow.result().ready(), "failed workflow must never be ready");
     }
 
-    const bool started = workflow.start(
-        "http://releases.ubuntu.com/test.iso",
-        "test.iso",
-        std::string(64, '0'));
-
-    if (started || workflow.state() != VerifiedDownloadState::Failed || workflow.result().message.empty()) {
-        std::cerr << "FAIL: unsafe URL must fail before download\n";
-        return EXIT_FAILURE;
+    {
+        VerifiedDownload workflow;
+        const bool started = workflow.start("https://releases.ubuntu.com/test.iso", "test.iso", "");
+        check(!started && workflow.state() == VerifiedDownloadState::Failed,
+              "missing checksum must fail before network activity");
+        check(workflow.result().message.find("SHA-256") != std::string::npos,
+              "missing checksum failure should explain the requirement");
     }
 
-    if (workflow.result().ready()) {
-        std::cerr << "FAIL: failed workflow must never be ready\n";
-        return EXIT_FAILURE;
-    }
-
+    if (failures) return EXIT_FAILURE;
     std::cout << "All verified download workflow tests passed\n";
     return EXIT_SUCCESS;
 }
