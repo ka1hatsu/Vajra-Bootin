@@ -18,14 +18,29 @@ bool has_https_prefix(const std::string& value) noexcept {
            std::equal(std::begin(prefix), std::end(prefix) - 1, value.begin());
 }
 
+bool safe_iso_filename(const std::string& filename) noexcept {
+    return filename.size() > 4 &&
+           filename.ends_with(".iso") &&
+           filename.find('/') == std::string::npos &&
+           filename.find('\\') == std::string::npos &&
+           filename.find("..") == std::string::npos;
+}
+
+bool url_matches_filename(const std::string& url, const std::string& filename) noexcept {
+    if (url.find('?') != std::string::npos || url.find('#') != std::string::npos) return false;
+    const auto slash = url.find_last_of('/');
+    return slash != std::string::npos && url.substr(slash + 1) == filename;
+}
+
 } // namespace
 
 bool is_valid_release_artifact(const ReleaseArtifact& artifact) noexcept {
     return !artifact.distro_id.empty() &&
            !artifact.version.empty() &&
            !artifact.architecture.empty() &&
-           !artifact.filename.empty() &&
+           safe_iso_filename(artifact.filename) &&
            has_https_prefix(artifact.download_url) &&
+           url_matches_filename(artifact.download_url, artifact.filename) &&
            is_hex_sha256(artifact.sha256);
 }
 
