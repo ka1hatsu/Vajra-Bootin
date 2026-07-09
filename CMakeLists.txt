@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.3 LANGUAGES CXX)
+project(VajraBootin VERSION 0.4.4 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -32,11 +32,16 @@ target_include_directories(vajra_verification PUBLIC src)
 target_compile_options(vajra_verification PRIVATE /W4 /permissive- /EHsc)
 target_link_libraries(vajra_verification PUBLIC bcrypt)
 
+add_library(vajra_workflow STATIC src/workflow/VerifiedDownload.cpp)
+target_include_directories(vajra_workflow PUBLIC src)
+target_compile_options(vajra_workflow PRIVATE /W4 /permissive- /EHsc)
+target_link_libraries(vajra_workflow PUBLIC vajra_download vajra_verification)
+
 add_executable(Vajra WIN32 src/main.cpp src/app/Application.cpp src/hardware/Scanner.cpp src/ui/AppUi.cpp)
 target_include_directories(Vajra PRIVATE src)
 target_compile_definitions(Vajra PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(Vajra PRIVATE /W4 /permissive- /EHsc)
-target_link_libraries(Vajra PRIVATE imgui vajra_recommender vajra_download vajra_verification d3d11 dxgi advapi32)
+target_link_libraries(Vajra PRIVATE imgui vajra_recommender vajra_workflow d3d11 dxgi advapi32)
 
 if(BUILD_TESTING)
     add_executable(VajraRecommenderTests tests/RecommenderTests.cpp)
@@ -58,6 +63,11 @@ if(BUILD_TESTING)
     target_link_libraries(VajraSha256Tests PRIVATE vajra_verification)
     target_compile_options(VajraSha256Tests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME sha256_verification COMMAND VajraSha256Tests)
+
+    add_executable(VajraVerifiedDownloadTests tests/VerifiedDownloadTests.cpp)
+    target_link_libraries(VajraVerifiedDownloadTests PRIVATE vajra_workflow)
+    target_compile_options(VajraVerifiedDownloadTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME verified_download_workflow COMMAND VajraVerifiedDownloadTests)
 endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Vajra)
