@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.0 LANGUAGES CXX)
+project(VajraBootin VERSION 0.4.2 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -27,25 +27,20 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp
 )
-
-target_include_directories(imgui PUBLIC
-    ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends
-)
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(imgui PUBLIC d3d11 dxgi)
 
-add_library(vajra_recommender STATIC
-    src/catalog/Distro.cpp
-    src/recommender/Recommender.cpp
-)
+add_library(vajra_recommender STATIC src/catalog/Distro.cpp src/recommender/Recommender.cpp)
 target_include_directories(vajra_recommender PUBLIC src)
 target_compile_options(vajra_recommender PRIVATE /W4 /permissive- /EHsc)
 
-add_library(vajra_download_policy STATIC
+add_library(vajra_download STATIC
     src/download/SourcePolicy.cpp
+    src/download/DownloadManager.cpp
 )
-target_include_directories(vajra_download_policy PUBLIC src)
-target_compile_options(vajra_download_policy PRIVATE /W4 /permissive- /EHsc)
+target_include_directories(vajra_download PUBLIC src)
+target_compile_options(vajra_download PRIVATE /W4 /permissive- /EHsc)
+target_link_libraries(vajra_download PUBLIC winhttp)
 
 add_executable(Vajra WIN32
     src/main.cpp
@@ -53,11 +48,10 @@ add_executable(Vajra WIN32
     src/hardware/Scanner.cpp
     src/ui/AppUi.cpp
 )
-
 target_include_directories(Vajra PRIVATE src)
 target_compile_definitions(Vajra PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_options(Vajra PRIVATE /W4 /permissive- /EHsc)
-target_link_libraries(Vajra PRIVATE imgui vajra_recommender vajra_download_policy d3d11 dxgi advapi32)
+target_link_libraries(Vajra PRIVATE imgui vajra_recommender vajra_download d3d11 dxgi advapi32)
 
 if(BUILD_TESTING)
     add_executable(VajraRecommenderTests tests/RecommenderTests.cpp)
@@ -66,9 +60,14 @@ if(BUILD_TESTING)
     add_test(NAME recommender_rules COMMAND VajraRecommenderTests)
 
     add_executable(VajraSourcePolicyTests tests/SourcePolicyTests.cpp)
-    target_link_libraries(VajraSourcePolicyTests PRIVATE vajra_download_policy)
+    target_link_libraries(VajraSourcePolicyTests PRIVATE vajra_download)
     target_compile_options(VajraSourcePolicyTests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME trusted_source_policy COMMAND VajraSourcePolicyTests)
+
+    add_executable(VajraDownloadManagerTests tests/DownloadManagerTests.cpp)
+    target_link_libraries(VajraDownloadManagerTests PRIVATE vajra_download)
+    target_compile_options(VajraDownloadManagerTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME download_manager_guards COMMAND VajraDownloadManagerTests)
 endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Vajra)
