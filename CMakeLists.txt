@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(VajraBootin VERSION 0.4.7 LANGUAGES CXX)
+project(VajraBootin VERSION 0.5.0 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "Vajra Bootin currently targets Windows only.")
@@ -32,7 +32,7 @@ target_include_directories(vajra_verification PUBLIC src)
 target_compile_options(vajra_verification PRIVATE /W4 /permissive- /EHsc)
 target_link_libraries(vajra_verification PUBLIC bcrypt)
 
-add_library(vajra_workflow STATIC src/workflow/VerifiedDownload.cpp src/workflow/DownloadSelection.cpp)
+add_library(vajra_workflow STATIC src/workflow/VerifiedDownload.cpp src/workflow/DownloadSelection.cpp src/workflow/ArtifactResolver.cpp)
 target_include_directories(vajra_workflow PUBLIC src)
 target_compile_options(vajra_workflow PRIVATE /W4 /permissive- /EHsc)
 target_link_libraries(vajra_workflow PUBLIC vajra_download vajra_verification vajra_recommender)
@@ -83,6 +83,11 @@ if(BUILD_TESTING)
     target_link_libraries(VajraDownloadSelectionTests PRIVATE vajra_workflow)
     target_compile_options(VajraDownloadSelectionTests PRIVATE /W4 /permissive- /EHsc)
     add_test(NAME recommendation_download_handoff COMMAND VajraDownloadSelectionTests)
+
+    add_executable(VajraArtifactResolverTests tests/ArtifactResolverTests.cpp)
+    target_link_libraries(VajraArtifactResolverTests PRIVATE vajra_workflow)
+    target_compile_options(VajraArtifactResolverTests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME publisher_artifact_resolver COMMAND VajraArtifactResolverTests)
 endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Vajra)
