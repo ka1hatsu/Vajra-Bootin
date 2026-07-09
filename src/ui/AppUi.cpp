@@ -2,12 +2,16 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <memory>
 #include <string>
 
 #include "catalog/Distro.h"
 #include "hardware/Scanner.h"
 #include "recommender/Recommender.h"
+#include "workflow/VerifiedDownload.h"
 
 namespace vajra::ui {
 namespace {
@@ -21,6 +25,16 @@ void centered_text(const char* text) {
 std::string format_gib(std::uint64_t bytes) {
     char buffer[64]{};
     std::snprintf(buffer, sizeof(buffer), "%.1f GiB", static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0));
+    return buffer;
+}
+
+std::string format_bytes(std::uint64_t bytes) {
+    static constexpr const char* units[] = {"B", "KiB", "MiB", "GiB", "TiB"};
+    double value = static_cast<double>(bytes);
+    int unit = 0;
+    while (value >= 1024.0 && unit < 4) { value /= 1024.0; ++unit; }
+    char buffer[64]{};
+    std::snprintf(buffer, sizeof(buffer), "%.1f %s", value, units[unit]);
     return buffer;
 }
 
@@ -38,11 +52,9 @@ void render_welcome(AppState& state) {
     centered_text("Find a Linux distribution suited to your hardware and needs.");
     centered_text("Scan locally, compare compatible choices, download safely, and verify before writing.");
     ImGui::Dummy(ImVec2(0.0f, 34.0f));
-
     constexpr float button_width = 230.0f;
     ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - button_width) * 0.5f + ImGui::GetCursorPosX());
     if (ImGui::Button("Scan My PC", ImVec2(button_width, 46.0f))) scan_and_open(state);
-
     ImGui::Dummy(ImVec2(0.0f, 14.0f));
     constexpr float row_width = 470.0f;
     ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - row_width) * 0.5f + ImGui::GetCursorPosX());
@@ -62,94 +74,138 @@ void render_scan(AppState& state) {
     ImGui::TextUnformatted("Hardware detected");
     ImGui::TextDisabled("Read-only local scan. No hardware identifiers are uploaded or stored.");
     ImGui::Separator(); ImGui::Spacing();
-
     if (!state.hardware_scanned) {
         if (ImGui::Button("Run hardware scan")) scan_and_open(state);
         return;
     }
-
     const auto& h = state.hardware;
     if (ImGui::BeginTable("HardwareProfile", 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 190.0f);
         ImGui::TableSetupColumn("Detected value", ImGuiTableColumnFlags_WidthStretch);
-        profile_row("CPU", h.cpu_name);
-        profile_row("Architecture", h.architecture);
-        profile_row("Logical processors", std::to_string(h.logical_processors));
-        profile_row("Physical memory", format_gib(h.memory_bytes));
-        profile_row("Graphics adapter", h.gpu_name);
-        profile_row("Dedicated GPU memory", format_gib(h.gpu_memory_bytes));
-        profile_row("Windows", h.windows_version);
-        profile_row("Firmware", h.firmware_mode);
-        profile_row("System drive free space", format_gib(h.system_drive_free_bytes));
-        ImGui::EndTable();
+        profile_row("CPU", h.cpu_name); profile_row("Architecture", h.architecture);
+        profile_row("Logical processors", std::to_string(h.logical_processors)); profile_row("Physical memory", format_gib(h.memory_bytes));
+        profile_row("Graphics adapter", h.gpu_name); profile_row("Dedicated GPU memory", format_gib(h.gpu_memory_bytes));
+        profile_row("Windows", h.windows_version); profile_row("Firmware", h.firmware_mode);
+        profile_row("System drive free space", format_gib(h.system_drive_free_bytes)); ImGui::EndTable();
     }
-
     ImGui::Dummy(ImVec2(0.0f, 16.0f));
     if (ImGui::Button("Scan again")) state.hardware = hardware::scan_hardware();
-    ImGui::SameLine();
-    if (ImGui::Button("Back to welcome")) state.current_screen = Screen::Welcome;
-    ImGui::SameLine();
-    if (ImGui::Button("Find Linux matches")) state.current_screen = Screen::Recommendations;
+    ImGui::SameLine(); if (ImGui::Button("Back to welcome")) state.current_screen = Screen::Welcome;
+    ImGui::SameLine(); if (ImGui::Button("Find Linux matches")) state.current_screen = Screen::Recommendations;
 }
 
 void render_recommendations(AppState& state) {
-    ImGui::Dummy(ImVec2(0.0f, 24.0f));
-    ImGui::TextUnformatted("Your Linux matches");
-    ImGui::TextDisabled("Compatibility is filtered first. Preferences then adjust the ranking.");
-    ImGui::Separator(); ImGui::Spacing();
-
+    ImGui::Dummy(ImVec2(0.0f, 24.0f)); ImGui::TextUnformatted("Your Linux matches");
+    ImGui::TextDisabled("Compatibility is filtered first. Preferences then adjust the ranking."); ImGui::Separator(); ImGui::Spacing();
     if (!state.hardware_scanned) {
         ImGui::TextWrapped("Run the hardware scan first so incompatible distributions can be filtered out.");
         if (ImGui::Button("Scan My PC")) scan_and_open(state);
-        ImGui::SameLine();
-        if (ImGui::Button("Back")) state.current_screen = Screen::Welcome;
+        ImGui::SameLine(); if (ImGui::Button("Back")) state.current_screen = Screen::Welcome;
         return;
     }
-
     static const char* purposes[] = {"Daily use", "Coding", "Old PC", "Stable system"};
     static const char* purpose_values[] = {"daily_use", "coding", "old_pc", "stable"};
     static const char* experiences[] = {"Beginner", "Intermediate"};
     static const char* experience_values[] = {"beginner", "intermediate"};
-
-    ImGui::SetNextItemWidth(220.0f);
-    ImGui::Combo("Main use", &state.purpose_index, purposes, IM_ARRAYSIZE(purposes));
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(220.0f);
-    ImGui::Combo("Experience", &state.experience_index, experiences, IM_ARRAYSIZE(experiences));
-    ImGui::Spacing();
-
+    ImGui::SetNextItemWidth(220.0f); ImGui::Combo("Main use", &state.purpose_index, purposes, IM_ARRAYSIZE(purposes));
+    ImGui::SameLine(); ImGui::SetNextItemWidth(220.0f); ImGui::Combo("Experience", &state.experience_index, experiences, IM_ARRAYSIZE(experiences)); ImGui::Spacing();
     recommender::Preferences preferences{purpose_values[state.purpose_index], experience_values[state.experience_index]};
     const auto results = recommender::recommend(state.hardware, catalog::distros(), preferences);
-
-    if (results.empty()) {
-        ImGui::TextWrapped("No catalog entry passed the compatibility filters for this hardware profile.");
-    }
-
+    if (results.empty()) ImGui::TextWrapped("No catalog entry passed the compatibility filters for this hardware profile.");
     for (const auto& result : results) {
         ImGui::PushID(result.distro->id.c_str());
         if (ImGui::BeginChild("card", ImVec2(0.0f, 145.0f), ImGuiChildFlags_Borders)) {
-            ImGui::Text("%s", result.distro->name.c_str());
-            ImGui::SameLine();
+            ImGui::Text("%s", result.distro->name.c_str()); ImGui::SameLine();
             ImGui::TextDisabled("%s | %s", result.distro->desktop.c_str(), result.distro->difficulty.c_str());
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f);
-            ImGui::Text("%d/100", result.score);
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f); ImGui::Text("%d/100", result.score);
             for (const auto& reason : result.reasons) ImGui::BulletText("%s", reason.c_str());
         }
-        ImGui::EndChild();
-        ImGui::PopID();
-        ImGui::Spacing();
+        ImGui::EndChild(); ImGui::PopID(); ImGui::Spacing();
+    }
+    if (ImGui::Button("Back to hardware")) state.current_screen = Screen::Scan;
+    ImGui::SameLine(); if (ImGui::Button("Home")) state.current_screen = Screen::Welcome;
+}
+
+const char* workflow_state_text(workflow::VerifiedDownloadState state) {
+    using S = workflow::VerifiedDownloadState;
+    switch (state) {
+    case S::Idle: return "Ready";
+    case S::Downloading: return "Downloading";
+    case S::Verifying: return "Verifying SHA-256";
+    case S::Verified: return "Verified and ready";
+    case S::Cancelled: return "Cancelled";
+    case S::Failed: return "Failed";
+    }
+    return "Unknown";
+}
+
+void render_downloads(AppState& state) {
+    static std::unique_ptr<workflow::VerifiedDownload> job = std::make_unique<workflow::VerifiedDownload>();
+    static char url[2048]{};
+    static char destination[1024] = "Downloads\\linux.iso";
+    static char sha256[65]{};
+
+    ImGui::Dummy(ImVec2(0.0f, 24.0f));
+    ImGui::TextUnformatted("Download Center");
+    ImGui::TextDisabled("HTTPS-only download with source policy checks and SHA-256 verification.");
+    ImGui::Separator(); ImGui::Spacing();
+
+    const auto current_state = job->state();
+    const bool busy = current_state == workflow::VerifiedDownloadState::Downloading ||
+                      current_state == workflow::VerifiedDownloadState::Verifying;
+
+    ImGui::BeginDisabled(busy);
+    ImGui::SetNextItemWidth(-1.0f); ImGui::InputTextWithHint("##download_url", "Official direct HTTPS ISO URL", url, sizeof(url));
+    ImGui::SetNextItemWidth(-1.0f); ImGui::InputTextWithHint("##destination", "Destination path, for example C:\\Users\\you\\Downloads\\linux.iso", destination, sizeof(destination));
+    ImGui::SetNextItemWidth(-1.0f); ImGui::InputTextWithHint("##sha256", "Expected SHA-256 (64 hexadecimal characters)", sha256, sizeof(sha256));
+    ImGui::EndDisabled();
+
+    ImGui::Spacing();
+    const auto progress = job->result();
+    const auto bytes = current_state == workflow::VerifiedDownloadState::Downloading ? job->state() : current_state;
+    (void)bytes;
+
+    ImGui::Text("State: %s", workflow_state_text(current_state));
+    if (!progress.message.empty()) ImGui::TextWrapped("%s", progress.message.c_str());
+    if (!progress.sha256.empty()) ImGui::TextWrapped("SHA-256: %s", progress.sha256.c_str());
+
+    if (current_state == workflow::VerifiedDownloadState::Downloading) {
+        ImGui::ProgressBar(-1.0f, ImVec2(-1.0f, 0.0f), "Downloading...");
+    } else if (current_state == workflow::VerifiedDownloadState::Verifying) {
+        ImGui::ProgressBar(-1.0f, ImVec2(-1.0f, 0.0f), "Verifying...");
+    } else if (current_state == workflow::VerifiedDownloadState::Verified) {
+        ImGui::ProgressBar(1.0f, ImVec2(-1.0f, 0.0f), "Verified");
+    } else {
+        ImGui::ProgressBar(0.0f, ImVec2(-1.0f, 0.0f), "Idle");
     }
 
-    if (ImGui::Button("Back to hardware")) state.current_screen = Screen::Scan;
+    ImGui::Spacing();
+    if (!busy) {
+        if (ImGui::Button("Download and verify")) {
+            if (current_state != workflow::VerifiedDownloadState::Idle) {
+                job = std::make_unique<workflow::VerifiedDownload>();
+            }
+            job->start(url, destination, sha256);
+        }
+    } else {
+        if (ImGui::Button("Cancel download")) job->cancel();
+    }
+
     ImGui::SameLine();
-    if (ImGui::Button("Home")) state.current_screen = Screen::Welcome;
+    ImGui::BeginDisabled(current_state != workflow::VerifiedDownloadState::Verified);
+    if (ImGui::Button("Continue to USB writer")) state.current_screen = Screen::Flash;
+    ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Back to welcome")) state.current_screen = Screen::Welcome;
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("The USB writer remains unavailable until this workflow reaches Verified state.");
 }
 
 void render_placeholder(AppState& state, const char* title, const char* description) {
-    ImGui::Dummy(ImVec2(0.0f, 35.0f));
-    ImGui::TextUnformatted(title); ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextWrapped("%s", description);
-    ImGui::Dummy(ImVec2(0.0f, 18.0f));
+    ImGui::Dummy(ImVec2(0.0f, 35.0f)); ImGui::TextUnformatted(title); ImGui::Separator(); ImGui::Spacing();
+    ImGui::TextWrapped("%s", description); ImGui::Dummy(ImVec2(0.0f, 18.0f));
     if (ImGui::Button("Back to welcome")) state.current_screen = Screen::Welcome;
 }
 
@@ -182,7 +238,8 @@ void render(AppState& state) {
     case Screen::Welcome: render_welcome(state); break;
     case Screen::Scan: render_scan(state); break;
     case Screen::Recommendations: render_recommendations(state); break;
-    case Screen::Downloads: render_placeholder(state, "Download Center", "Secure download resolution, resume support, and SHA-256 verification are planned for the download phase."); break;
+    case Screen::Downloads: render_downloads(state); break;
+    case Screen::Flash: render_placeholder(state, "USB Writer", "The verified image handoff is ready. Raw USB writing will be implemented as a separate safety-critical phase."); break;
     default: render_placeholder(state, "Coming soon", "This section is part of a later development phase."); break;
     }
     ImGui::End();
